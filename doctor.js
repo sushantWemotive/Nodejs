@@ -7,10 +7,10 @@ app.use(express.json());
 const sequelize = new Sequelize('test', 'root', 'Test@0115', {
   host: 'localhost',
   dialect: 'mysql',
-  logging: true,
+  logging: false,
 });
 
-const Doctor = sequelize.define('doctor', {
+const Doctor_avalability = sequelize.define('doctor', {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
@@ -66,7 +66,7 @@ async function initDB() {
     try {
         await sequelize.authenticate();
         console.log('database connected successfully!');
-        await Doctor.sync(); 
+        await Doctor_avalability.sync(); 
         console.log('doctor table synchronized!');
     } catch (error) {
         console.error('database connection failed:', error);
@@ -87,7 +87,7 @@ app.post('/api/doctors', async (req, res) => {
             return res.status(400).json({ error: 'Start time must be before end time' });
         }
 
-        const overlapping = await Doctor.findOne({
+        const overlapping = await Doctor_avalability.findOne({
             where: {
                 clinic_id,
                 user_id,
@@ -114,7 +114,7 @@ app.post('/api/doctors', async (req, res) => {
             });
         }
 
-        const newDoctor = await Doctor.create({
+        const newDoctor = await Doctor_avalability.create({
             clinic_id,
             user_id,
             type,
@@ -140,12 +140,12 @@ app.post('/api/doctors', async (req, res) => {
 
 // app.get('/api/doctors', async (req, res) => {
 //     try {
-//         const doctors = await Doctor.findAll();
+//         const doctors = await Doctor_avalability.findAll();
 //         res.status(200).json(doctors);
 //     }
 app.get('/api/doctors/:id', async (req, res) => {
     try {
-         const doctor = await Doctor.findByPk(req.params.id);
+         const doctor = await Doctor_avalability.findByPk(req.params.id);
         if (!doctor) {
             return res.status(404).json({ error: 'Doctor not found' });
         }
@@ -170,7 +170,7 @@ app.put('/api/doctors/:id', async (req, res) => {
             return res.status(400).json({ error: 'Start time must be before end time' });
         }
 
-        const overlapping = await Doctor.findOne({
+        const overlapping = await Doctor_avalability.findOne({
             where: {
                 clinic_id,
                 user_id,
@@ -198,7 +198,7 @@ app.put('/api/doctors/:id', async (req, res) => {
             });
         }
 
-        const [updated] = await Doctor.update({
+        const [updated] = await Doctor_avalability.update({
             clinic_id,
             user_id,
             type,
@@ -213,7 +213,7 @@ app.put('/api/doctors/:id', async (req, res) => {
         });
 
         if (updated) {
-            const updatedDoctor = await Doctor.findByPk(req.params.id);
+            const updatedDoctor = await Doctor_avalability.findByPk(req.params.id);
             res.status(200).json(updatedDoctor);
         } else {
             res.status(404).json({ error: 'Doctor not found' });
@@ -225,7 +225,7 @@ app.put('/api/doctors/:id', async (req, res) => {
 });
 app.delete('/api/doctors/:id', async (req, res) => {
     try {
-        const deletedCount = await Doctor.destroy({
+        const deletedCount = await Doctor_avalability.destroy({
             where: { id: req.params.id }
         });
          if (deletedCount === 0) {
