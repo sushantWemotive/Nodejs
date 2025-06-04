@@ -7,7 +7,7 @@ app.use(express.json());
 const sequelize = new Sequelize('test', 'root', 'Test@0115', {
   host: 'localhost',
   dialect: 'mysql',
-  logging: false,
+  logging: true,
 });
 
 const Doctor = sequelize.define('doctor', {
