@@ -11,49 +11,40 @@ const sequelize = new Sequelize('test', 'root', 'Test@0115', {
 });
 
 const Doctor = sequelize.define('doctor', {
-    id : 
-    {
+    id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true
     },
-    clinic_id: 
-    {
+    clinic_id: {
         type: DataTypes.INTEGER,
         allowNull: false
     },
-    user_id: 
-    {
+    user_id: {
         type: DataTypes.INTEGER,
         allowNull: false
     },
-    type: 
-    {
+    type: {
         type: DataTypes.STRING(50),
         allowNull: true
     },
-    day_of_week: 
-    {
+    day_of_week: {
         type: DataTypes.STRING(10),
         allowNull: false
     },
-    date: 
-    {
-        type: DataTypes.DATE,
+    date: {
+        type: DataTypes.DATEONLY,  
         allowNull: false
     },
-    start_time: 
-    {
+    start_time: {
         type: DataTypes.TIME,
         allowNull: false
     },
-    end_time: 
-    {
+    end_time: {
         type: DataTypes.TIME,
         allowNull: false
     },
-    description : 
-    {
+    description: {
         type: DataTypes.STRING(255),
         allowNull: true
     },
@@ -61,6 +52,14 @@ const Doctor = sequelize.define('doctor', {
         type: DataTypes.BOOLEAN,
         defaultValue: true
     }
+}, {
+    indexes: [
+        {
+            unique: true,
+            name: 'unique_doctor_schedule',
+            fields: ['clinic_id', 'user_id', 'date', 'start_time', 'end_time']
+        }
+    ]
 });
 
 async function initDB() {
@@ -73,28 +72,46 @@ async function initDB() {
         console.error('database connection failed:', error);
     }
 }
-
 app.post('/api/doctors', async (req, res) => {
     try {
         const { clinic_id, user_id, type, day_of_week, date, start_time, end_time, description } = req.body;
         const is_avalable = type === 'leave' ? false : true;
+        
         // Validation..
         if (!clinic_id || !user_id || !day_of_week || !date || !start_time || !end_time) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
-        const duplicate = await Doctor.findOne({
+
+        // if start time is before end time
+        if (new Date(`1970-01-01T${start_time}`) >= new Date(`1970-01-01T${end_time}`)) {
+            return res.status(400).json({ error: 'Start time must be before end time' });
+        }
+
+        const overlapping = await Doctor.findOne({
             where: {
                 clinic_id,
                 user_id,
-                type,
-                day_of_week,
                 date,
-                start_time,
-                end_time
+                [Sequelize.Op.or]: [
+                    {
+                        start_time: { [Sequelize.Op.lt]: end_time },
+                        end_time: { [Sequelize.Op.gt]: start_time }
+                    },
+                    {
+                        start_time: { [Sequelize.Op.gte]: start_time, [Sequelize.Op.lt]: end_time }
+                    },
+                    {
+                        end_time: { [Sequelize.Op.gt]: start_time, [Sequelize.Op.lte]: end_time }
+                    }
+                ]
             }
         });
-        if (duplicate) {
-            return res.status(409).json({ error: 'Duplicate entry: Doctor with these details already exists' });
+
+        if (overlapping) {
+            return res.status(409).json({ 
+                error: 'time overlapping: doctor already has appointment or leave during this time',
+                conflictingEntry: overlapping
+            });
         }
 
         const newDoctor = await Doctor.create({
@@ -111,8 +128,14 @@ app.post('/api/doctors', async (req, res) => {
         res.status(201).json(newDoctor);
     } catch (error) {
         console.error('Error creating doctor:', error);
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            return res.status(409).json({ 
+                error: 'duplicate entry: doctor already has this exact time slot scheduled',
+                details: error.errors.map(err => err.message)
+            });
+        }
         res.status(500).json({ error: 'Internal server error' });
-    };
+    }
 });
 
 // app.get('/api/doctors', async (req, res) => {
@@ -132,15 +155,48 @@ app.get('/api/doctors/:id', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-
 app.put('/api/doctors/:id', async (req, res) => {
     try {
         const { clinic_id, user_id, type, day_of_week, date, start_time, end_time, description } = req.body;
+        const is_avalable = type === 'leave' ? false : true;
+        
         // Validation..
         if (!clinic_id || !user_id || !day_of_week || !date || !start_time || !end_time) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
-        const is_avalable = type === 'leave' ? false : true;
+
+        // if start time is before end time
+        if (new Date(`1970-01-01T${start_time}`) >= new Date(`1970-01-01T${end_time}`)) {
+            return res.status(400).json({ error: 'Start time must be before end time' });
+        }
+
+        const overlapping = await Doctor.findOne({
+            where: {
+                clinic_id,
+                user_id,
+                date,
+                id: { [Sequelize.Op.ne]: req.params.id }, 
+                [Sequelize.Op.or]: [
+                    {
+                        start_time: { [Sequelize.Op.lt]: end_time },
+                        end_time: { [Sequelize.Op.gt]: start_time }
+                    },
+                    {
+                        start_time: { [Sequelize.Op.gte]: start_time, [Sequelize.Op.lt]: end_time }
+                    },
+                    {
+                        end_time: { [Sequelize.Op.gt]: start_time, [Sequelize.Op.lte]: end_time }
+                    }
+                ]
+            }
+        });
+
+        if (overlapping) {
+            return res.status(409).json({ 
+                error: 'time overlapping: doctor already has appointment or leave during this time',
+                conflictingEntry: overlapping
+            });
+        }
 
         const [updated] = await Doctor.update({
             clinic_id,
@@ -166,9 +222,7 @@ app.put('/api/doctors/:id', async (req, res) => {
         console.error('Error updating doctor:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
-}
-);
-
+});
 app.delete('/api/doctors/:id', async (req, res) => {
     try {
         const deletedCount = await Doctor.destroy({
