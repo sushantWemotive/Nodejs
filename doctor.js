@@ -7,7 +7,7 @@ app.use(express.json());
 const sequelize = new Sequelize('test', 'root', 'Test@0115', {
   host: 'localhost',
   dialect: 'mysql',
-  logging: false,
+  logging: true,
 });
 
 const Doctor_avalability = sequelize.define('doctor', {
@@ -82,7 +82,7 @@ app.post('/api/doctors', async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        // if start time is before end time
+        // if start time is before end time..
         if (new Date(`1970-01-01T${start_time}`) >= new Date(`1970-01-01T${end_time}`)) {
             return res.status(400).json({ error: 'Start time must be before end time' });
         }
@@ -223,6 +223,7 @@ app.put('/api/doctors/:id', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
 app.delete('/api/doctors/:id', async (req, res) => {
     try {
         const deletedCount = await Doctor_avalability.destroy({
